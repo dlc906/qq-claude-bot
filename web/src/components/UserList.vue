@@ -1,22 +1,31 @@
 <template>
   <div class="user-list">
-    <div class="header">💬 聊天记录</div>
-    <div v-if="users.length === 0" class="empty">暂无聊天记录</div>
-    <div
-      v-for="user in users"
-      :key="user.user_id"
-      class="user-item"
-      :class="{ active: selectedUserId === user.user_id }"
-      @click="$emit('select', user.user_id)"
-    >
-      <div class="user-avatar">{{ (user.nickname || user.user_id).slice(0, 1) }}</div>
-      <div class="user-info">
-        <div class="user-name">{{ user.nickname || user.user_id.slice(0, 12) + '...' }}</div>
-        <div class="user-preview">{{ user.last_message.slice(0, 40) }}{{ user.last_message.length > 40 ? '...' : '' }}</div>
+    <div class="list-header">
+      <h3>会话</h3>
+      <span class="badge" v-if="users.length">{{ users.length }}</span>
+    </div>
+    <div class="list-body">
+      <div v-if="users.length === 0" class="empty">
+        <div class="empty-icon">💬</div>
+        <div class="empty-text">暂无聊天记录</div>
       </div>
-      <div class="user-meta">
-        <div class="user-time">{{ formatTime(user.last_timestamp) }}</div>
-        <div class="user-count">{{ user.message_count }} 条</div>
+      <div
+        v-for="user in users"
+        :key="user.user_id"
+        class="user-item"
+        :class="{ active: selectedUserId === user.user_id }"
+        @click="$emit('select', user.user_id)"
+      >
+        <div class="avatar" :style="{ background: avatarColor(user.user_id) }">
+          {{ (user.nickname || user.user_id).slice(0, 1) }}
+        </div>
+        <div class="info">
+          <div class="name-row">
+            <span class="name">{{ user.nickname || user.user_id.slice(0, 12) }}</span>
+            <span class="time">{{ formatTime(user.last_timestamp) }}</span>
+          </div>
+          <div class="preview">{{ user.last_message.slice(0, 50) }}{{ user.last_message.length > 50 ? '...' : '' }}</div>
+        </div>
       </div>
     </div>
   </div>
@@ -33,82 +42,99 @@ defineEmits<{ select: [id: string] }>()
 const users = ref<UserRow[]>([])
 let timer: ReturnType<typeof setInterval>
 
+const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#f97316']
+
+function avatarColor(id: string): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash)
+  return COLORS[Math.abs(hash) % COLORS.length]
+}
+
 async function load() {
-  try {
-    users.value = await fetchUsers()
-  } catch (e) {
-    console.error('Failed to load users:', e)
-  }
+  try { users.value = await fetchUsers() } catch {}
 }
 
 function formatTime(ts: number): string {
   const d = new Date(ts * 1000)
   const now = new Date()
   const diff = (now.getTime() - d.getTime()) / 1000
-
   if (diff < 60) return '刚刚'
   if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`
   if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-onMounted(() => {
-  load()
-  timer = setInterval(load, 5000)
-})
-
-onUnmounted(() => {
-  clearInterval(timer)
-})
+onMounted(() => { load(); timer = setInterval(load, 5000) })
+onUnmounted(() => clearInterval(timer))
 </script>
 
 <style scoped>
 .user-list {
-  width: 280px;
-  min-width: 280px;
-  background: #fff;
-  border-right: 1px solid #e0e0e0;
+  width: 300px;
+  min-width: 300px;
+  background: var(--card);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
-.header {
-  padding: 16px;
+.list-header {
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.list-header h3 {
   font-size: 16px;
   font-weight: 600;
-  border-bottom: 1px solid #e0e0e0;
-  background: #fafafa;
+}
+
+.badge {
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.list-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
 }
 
 .empty {
-  padding: 32px;
-  text-align: center;
-  color: #999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
 }
+
+.empty-icon { font-size: 40px; margin-bottom: 12px; }
+.empty-text { font-size: 14px; }
 
 .user-item {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 12px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background 0.15s;
+  gap: 12px;
 }
 
-.user-item:hover {
-  background: #f5f5f5;
-}
+.user-item:hover { background: var(--bg); }
+.user-item.active { background: var(--primary-light); }
 
-.user-item.active {
-  background: #e3f2fd;
-}
-
-.user-avatar {
-  width: 40px;
-  height: 40px;
+.avatar {
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  background: #1976d2;
   color: #fff;
   display: flex;
   align-items: center;
@@ -116,46 +142,39 @@ onUnmounted(() => {
   font-size: 16px;
   font-weight: 600;
   flex-shrink: 0;
-  margin-right: 10px;
 }
 
-.user-info {
-  flex: 1;
-  min-width: 0;
+.info { flex: 1; min-width: 0; }
+
+.name-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 3px;
 }
 
-.user-name {
+.name {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.user-preview {
-  font-size: 12px;
-  color: #999;
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-meta {
-  text-align: right;
+.time {
+  font-size: 11px;
+  color: var(--text-muted);
   flex-shrink: 0;
   margin-left: 8px;
 }
 
-.user-time {
-  font-size: 11px;
-  color: #bbb;
-}
-
-.user-count {
-  font-size: 11px;
-  color: #bbb;
-  margin-top: 2px;
+.preview {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
 }
 </style>

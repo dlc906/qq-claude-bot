@@ -1,45 +1,63 @@
 <template>
   <div class="knowledge-view">
     <div class="kb-header">
-      <span class="kb-title">📚 知识库管理</span>
-      <span class="kb-count">{{ docs.length }} 个文档</span>
+      <div>
+        <h2>📚 知识库</h2>
+        <div class="kb-subtitle">管理 Claude 参考的文档资料</div>
+      </div>
+      <span class="badge" v-if="docs.length">{{ docs.length }}</span>
     </div>
 
-    <!-- Upload area -->
-    <div
-      class="upload-area"
-      :class="{ dragging }"
-      @dragover.prevent="dragging = true"
-      @dragleave="dragging = false"
-      @drop.prevent="onDrop"
-      @click="openFilePicker"
-    >
-      <input
-        ref="fileInput"
-        type="file"
-        multiple
-        accept=".txt,.md,.pdf,.docx,.csv,.json"
-        style="display: none"
-        @change="onFileSelect"
-      />
-      <div class="upload-icon">📄</div>
-      <div class="upload-text">点击或拖拽上传文档</div>
-      <div class="upload-hint">支持 txt / md / pdf / docx</div>
-    </div>
+    <div class="kb-content">
+      <!-- Upload area -->
+      <div
+        class="upload-area"
+        :class="{ dragging }"
+        @dragover.prevent="dragging = true"
+        @dragleave="dragging = false"
+        @drop.prevent="onDrop"
+        @click="openFilePicker"
+      >
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          accept=".txt,.md,.pdf,.docx,.csv,.json"
+          style="display: none"
+          @change="onFileSelect"
+        />
+        <div class="upload-icon">📤</div>
+        <div class="upload-text">点击或拖拽上传文档</div>
+        <div class="upload-hint">支持 TXT / Markdown / PDF / Word 格式</div>
+      </div>
 
-    <!-- Upload progress -->
-    <div v-if="uploading" class="uploading">上传中...</div>
+      <!-- Upload progress -->
+      <div v-if="uploading" class="uploading">
+        <div class="spinner"></div>
+        上传中...
+      </div>
 
-    <!-- Document list -->
-    <div class="doc-list">
-      <div v-if="docs.length === 0" class="empty">暂无文档</div>
-      <div v-for="doc in docs" :key="doc.id" class="doc-item">
-        <div class="doc-icon">{{ typeIcon(doc.filetype) }}</div>
-        <div class="doc-info">
-          <div class="doc-name">{{ doc.filename }}</div>
-          <div class="doc-meta">{{ doc.filetype }} · {{ formatSize(doc.size) }} · {{ formatTime(doc.created_at) }}</div>
+      <!-- Document list -->
+      <div class="doc-list">
+        <div v-if="docs.length === 0 && !uploading" class="empty">
+          <div class="empty-icon">📄</div>
+          <div class="empty-text">暂无文档</div>
+          <div class="empty-hint">上传文档后 Claude 会自动参考其内容回答问题</div>
         </div>
-        <button class="btn-delete" @click="handleDelete(doc.id)" title="删除">✕</button>
+        <div v-for="doc in docs" :key="doc.id" class="doc-item">
+          <div class="doc-icon">{{ typeIcon(doc.filetype) }}</div>
+          <div class="doc-info">
+            <div class="doc-name">{{ doc.filename }}</div>
+            <div class="doc-meta">
+              <span class="doc-type">{{ doc.filetype }}</span>
+              <span class="dot">·</span>
+              <span>{{ formatSize(doc.size) }}</span>
+              <span class="dot">·</span>
+              <span>{{ formatTime(doc.created_at) }}</span>
+            </div>
+          </div>
+          <button class="btn-delete" @click="handleDelete(doc.id)" title="删除文档">🗑️</button>
+        </div>
       </div>
     </div>
   </div>
@@ -57,38 +75,25 @@ const fileInput = ref<HTMLInputElement | null>(null)
 let timer: ReturnType<typeof setInterval>
 
 async function load() {
-  try {
-    docs.value = await fetchKnowledge()
-  } catch (e) {
-    console.error('Failed to load knowledge:', e)
-  }
+  try { docs.value = await fetchKnowledge() } catch {}
 }
 
-function openFilePicker() {
-  fileInput.value?.click()
-}
+function openFilePicker() { fileInput.value?.click() }
 
 function onFileSelect(e: Event) {
   const input = e.target as HTMLInputElement
-  if (input.files) {
-    handleFiles(input.files)
-    input.value = '' // reset
-  }
+  if (input.files) { handleFiles(input.files); input.value = '' }
 }
 
 function onDrop(e: DragEvent) {
   dragging.value = false
-  if (e.dataTransfer?.files) {
-    handleFiles(e.dataTransfer.files)
-  }
+  if (e.dataTransfer?.files) handleFiles(e.dataTransfer.files)
 }
 
 async function handleFiles(files: FileList) {
   uploading.value = true
   for (const file of Array.from(files)) {
-    try {
-      await uploadKnowledge(file)
-    } catch (e) {
+    try { await uploadKnowledge(file) } catch (e) {
       console.error('Upload failed:', e)
       alert(`上传失败: ${file.name}`)
     }
@@ -98,7 +103,7 @@ async function handleFiles(files: FileList) {
 }
 
 async function handleDelete(id: number) {
-  if (!confirm('确定删除该文档？')) return
+  if (!confirm('确定删除该文档？删除后会话将刷新。')) return
   await deleteKnowledge(id)
   await load()
 }
@@ -118,153 +123,163 @@ function formatSize(bytes: number): string {
 
 function formatTime(ts: number): string {
   const d = new Date(ts * 1000)
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-onMounted(() => {
-  load()
-  timer = setInterval(load, 10000)
-})
-
-onUnmounted(() => {
-  clearInterval(timer)
-})
+onMounted(() => { load(); timer = setInterval(load, 10000) })
+onUnmounted(() => clearInterval(timer))
 </script>
 
 <style scoped>
 .knowledge-view {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: #f5f5f5;
-  overflow: hidden;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px;
 }
 
 .kb-header {
-  padding: 14px 20px;
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  margin-bottom: 24px;
 }
 
-.kb-title {
-  font-size: 16px;
+.kb-header h2 { font-size: 22px; font-weight: 700; }
+.kb-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+.badge {
+  background: var(--primary);
+  color: #fff;
+  font-size: 12px;
   font-weight: 600;
-  color: #333;
+  padding: 3px 10px;
+  border-radius: 10px;
+  margin-top: 4px;
 }
 
-.kb-count {
-  font-size: 13px;
-  color: #999;
-}
+.kb-content { display: flex; flex-direction: column; gap: 16px; }
 
 .upload-area {
-  margin: 16px 20px;
-  padding: 32px;
-  border: 2px dashed #ccc;
-  border-radius: 10px;
+  padding: 40px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  background: #fff;
+  background: var(--card);
 }
 
 .upload-area:hover,
 .upload-area.dragging {
-  border-color: #1976d2;
-  background: #e3f2fd;
+  border-color: var(--primary);
+  background: var(--primary-light);
 }
 
-.upload-icon {
-  font-size: 36px;
-  margin-bottom: 8px;
-}
-
-.upload-text {
-  font-size: 14px;
-  color: #555;
-  margin-bottom: 4px;
-}
-
-.upload-hint {
-  font-size: 12px;
-  color: #aaa;
-}
+.upload-icon { font-size: 40px; margin-bottom: 12px; }
+.upload-text { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+.upload-hint { font-size: 13px; color: var(--text-muted); }
 
 .uploading {
-  padding: 10px 20px;
-  text-align: center;
-  color: #1976d2;
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--primary-light);
+  border-radius: var(--radius-sm);
 }
 
-.doc-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 20px 20px;
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--primary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
 }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.doc-list { display: flex; flex-direction: column; gap: 8px; }
 
 .empty {
-  text-align: center;
-  color: #bbb;
-  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px;
+  color: var(--text-muted);
 }
+
+.empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+.empty-text { font-size: 15px; font-weight: 500; color: var(--text-secondary); }
+.empty-hint { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 
 .doc-item {
   display: flex;
   align-items: center;
-  padding: 12px 14px;
-  background: #fff;
-  border-radius: 8px;
-  margin-bottom: 8px;
-  transition: box-shadow 0.15s;
+  padding: 14px 16px;
+  background: var(--card);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  transition: all 0.15s;
+  gap: 14px;
 }
 
 .doc-item:hover {
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-md);
+  border-color: transparent;
 }
 
-.doc-icon {
-  font-size: 24px;
-  margin-right: 12px;
-  flex-shrink: 0;
-}
+.doc-icon { font-size: 28px; flex-shrink: 0; }
 
-.doc-info {
-  flex: 1;
-  min-width: 0;
-}
+.doc-info { flex: 1; min-width: 0; }
 
 .doc-name {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
-  color: #999;
-  margin-top: 2px;
+  color: var(--text-muted);
+  margin-top: 3px;
 }
+
+.doc-type {
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.dot { color: var(--border); }
 
 .btn-delete {
   background: none;
   border: none;
-  color: #ccc;
   font-size: 16px;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
   transition: all 0.15s;
+  opacity: 0.4;
 }
 
 .btn-delete:hover {
-  color: #e53935;
-  background: #ffebee;
+  opacity: 1;
+  background: var(--danger-light);
 }
 </style>

@@ -1,39 +1,63 @@
 <template>
   <div class="settings-view">
-    <h2>⚙️ 设置</h2>
-
-    <div class="section">
-      <h3>LLM 提供商</h3>
-      <label class="radio-label">
-        <input type="radio" value="claude-code" v-model="form.llmProvider" />
-        Claude Code CLI
-      </label>
-      <label class="radio-label">
-        <input type="radio" value="openai" v-model="form.llmProvider" />
-        OpenAI 兼容 API
-      </label>
+    <div class="settings-header">
+      <h2>⚙️ 设置</h2>
+      <div class="settings-subtitle">配置 AI 模型和连接方式</div>
     </div>
 
-    <div class="section" v-if="form.llmProvider === 'openai'">
-      <h3>OpenAI 配置</h3>
-      <div class="field">
-        <label>API Key</label>
-        <input type="password" v-model="form.openaiApiKey" placeholder="sk-..." />
-      </div>
-      <div class="field">
-        <label>Base URL</label>
-        <input type="text" v-model="form.openaiBaseUrl" placeholder="https://api.openai.com/v1" />
-      </div>
-      <div class="field">
-        <label>模型</label>
-        <input type="text" v-model="form.openaiModel" placeholder="gpt-4o" />
+    <div class="settings-card">
+      <div class="card-title">LLM 提供商</div>
+      <div class="provider-options">
+        <label class="provider-option" :class="{ selected: form.llmProvider === 'claude-code' }">
+          <input type="radio" value="claude-code" v-model="form.llmProvider" />
+          <div class="option-content">
+            <div class="option-icon">🧠</div>
+            <div>
+              <div class="option-title">Claude Code CLI</div>
+              <div class="option-desc">通过 Claude Code 命令行工具调用</div>
+            </div>
+          </div>
+        </label>
+        <label class="provider-option" :class="{ selected: form.llmProvider === 'openai' }">
+          <input type="radio" value="openai" v-model="form.llmProvider" />
+          <div class="option-content">
+            <div class="option-icon">🌐</div>
+            <div>
+              <div class="option-title">OpenAI 兼容 API</div>
+              <div class="option-desc">DeepSeek / 通义千问 / GPT 等</div>
+            </div>
+          </div>
+        </label>
       </div>
     </div>
 
-    <button class="save-btn" @click="save" :disabled="saving">
-      {{ saving ? '保存中...' : '保存设置' }}
-    </button>
-    <div class="tip" v-if="saved">✅ 已保存</div>
+    <div class="settings-card" v-if="form.llmProvider === 'openai'">
+      <div class="card-title">API 配置</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="password" v-model="form.openaiApiKey" placeholder="sk-..." />
+        </div>
+        <div class="form-group">
+          <label>Base URL</label>
+          <input type="text" v-model="form.openaiBaseUrl" placeholder="https://api.openai.com/v1" />
+        </div>
+        <div class="form-group">
+          <label>模型名称</label>
+          <input type="text" v-model="form.openaiModel" placeholder="gpt-4o" />
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-save" @click="save" :disabled="saving">
+        <span v-if="saving" class="spinner"></span>
+        {{ saving ? '保存中...' : '保存设置' }}
+      </button>
+      <transition name="fade">
+        <span class="saved-tip" v-if="saved">✅ 已保存，立即生效</span>
+      </transition>
+    </div>
   </div>
 </template>
 
@@ -51,67 +75,149 @@ const form = ref<Settings>({
 const saving = ref(false)
 const saved = ref(false)
 
-onMounted(async () => {
-  const s = await fetchSettings()
-  form.value = s
-})
+onMounted(async () => { form.value = await fetchSettings() })
 
 async function save() {
   saving.value = true
   saved.value = false
-  const s = await updateSettings(form.value)
-  form.value = s
+  form.value = await updateSettings(form.value)
   saving.value = false
   saved.value = true
-  setTimeout(() => saved.value = false, 2000)
+  setTimeout(() => saved.value = false, 2500)
 }
 </script>
 
 <style scoped>
 .settings-view {
-  max-width: 500px;
-  margin: 40px auto;
-  padding: 24px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 32px;
+  width: 100%;
 }
-h2 { margin-bottom: 24px; }
-.section { margin-bottom: 20px; }
-.section h3 { font-size: 14px; color: #666; margin-bottom: 8px; }
-.radio-label {
-  display: block;
-  padding: 8px 0;
-  font-size: 14px;
+
+.settings-header { margin-bottom: 28px; }
+.settings-header h2 { font-size: 22px; font-weight: 700; }
+.settings-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+.settings-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 14px;
+}
+
+.provider-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.provider-option {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: all 0.15s;
 }
-.radio-label input { margin-right: 8px; }
-.field { margin-bottom: 12px; }
-.field label {
+
+.provider-option:hover { border-color: #d1d5db; }
+.provider-option.selected { border-color: var(--primary); background: var(--primary-light); }
+.provider-option input { display: none; }
+
+.option-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.option-icon { font-size: 24px; }
+.option-title { font-size: 14px; font-weight: 500; }
+.option-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-group label {
   display: block;
   font-size: 13px;
-  color: #666;
-  margin-bottom: 4px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
 }
-.field input {
+
+.form-group input {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   font-size: 14px;
+  transition: border-color 0.15s;
+  background: var(--bg);
 }
-.field input:focus { outline: none; border-color: #1976d2; }
-.save-btn {
-  margin-top: 16px;
-  padding: 10px 24px;
-  background: #1976d2;
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn-save {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 28px;
+  background: var(--primary);
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.15s;
 }
-.save-btn:hover { background: #1565c0; }
-.save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.tip { margin-top: 8px; font-size: 13px; color: #4caf50; }
+
+.btn-save:hover { background: #2563eb; }
+.btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.saved-tip {
+  font-size: 13px;
+  color: #10b981;
+  font-weight: 500;
+}
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>
