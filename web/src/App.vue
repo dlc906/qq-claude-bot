@@ -7,9 +7,13 @@
     <div class="app-body" v-show="activeTab === 'kb'">
       <KnowledgeView />
     </div>
+    <div class="app-body" v-show="activeTab === 'settings'">
+      <SettingsView />
+    </div>
     <div class="tab-bar">
       <div class="tab" :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'">💬 聊天记录</div>
       <div class="tab" :class="{ active: activeTab === 'kb' }" @click="activeTab = 'kb'">📚 知识库</div>
+      <div class="tab" :class="{ active: activeTab === 'settings' }" @click="activeTab = 'settings'">⚙️ 设置</div>
     </div>
   </div>
 </template>
@@ -19,8 +23,9 @@ import { ref } from 'vue'
 import UserList from './components/UserList.vue'
 import ChatView from './components/ChatView.vue'
 import KnowledgeView from './components/KnowledgeView.vue'
+import SettingsView from './components/SettingsView.vue'
 
-const activeTab = ref<'chat' | 'kb'>('chat')
+const activeTab = ref<'chat' | 'kb' | 'settings'>('chat')
 const selectedUserId = ref<string | null>(null)
 
 function onSelect(id: string) {

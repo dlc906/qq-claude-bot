@@ -23,3 +23,10 @@ export interface KnowledgeRow {
   size: number
   created_at: number
 }
+
+export interface Settings {
+  llmProvider: 'claude-code' | 'openai'
+  openaiApiKey: string
+  openaiBaseUrl: string
+  openaiModel: string
+}

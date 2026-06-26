@@ -3,10 +3,11 @@ import { execSync } from 'child_process'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { config, validateConfig } from './config.js'
-import { askClaude } from './claude.js'
+import { askLLM } from './llm.js'
 import { loadSessions, getSession, saveSession, clearSession } from './sessions.js'
 import { initDb, closeDb, insertMessage } from './db.js'
 import { startApiServer, getKnowledgeContent } from './api.js'
+import { loadSettings } from './settings.js'
 import { createOpenAPI, createWebsocket, AvailableIntentsEventsEnum } from 'qq-bot-sdk'
 
 const client = createOpenAPI({
@@ -76,7 +77,7 @@ async function handleMessage(data: any) {
   try {
     const existingSession = getSession(userId)
     const knowledge = getKnowledgeContent()
-    const result = await askClaude(prompt, existingSession ?? undefined, knowledge || undefined)
+    const result = await askLLM(prompt, existingSession ?? undefined, knowledge || undefined)
 
     // Persist session for next call
     if (result.sessionId) {
@@ -303,6 +304,7 @@ ws.on('CLOSED', () => console.error('[ws] Connection closed'))
 // ── Start ────────────────────────────────────────────
 
 validateConfig()
+loadSettings()
 loadSessions()
 await initDb()
 startApiServer(config.apiPort)

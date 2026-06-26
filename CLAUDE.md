@@ -1,48 +1,68 @@
-[文档: 戴腊春-应届生年经验-全栈开发.pdf]
+# CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-个人简历
-细心从每一个细节开始
-Personal resume
-姓  名张志豪年  龄21 岁
-性  别男工作年限应届生
-电  话13349766957邮  箱3357064126@qq.com
-政治面貌团员
-求职意向全栈开发期望城市武汉
-期望薪资8K /月到岗时间到岗时间另行商议
-2025-07 〜 2025-09武汉吧哒科技股份有限公司驻场运维
-在实习期间，主要负责客户现场的设备日常维护与定期巡检工作。维护过程中，精准定位并快速解决服务器、网络设备等硬
-件故障及运行异常问题，保障客户业务系统稳定运行；巡检环节严格按照标准流程，对设备运行状态、性能参数、安全配置
-等进行全面排查记录，形成详细巡检报告并提出优化建议，有效降低设备潜在故障⻛险。
-期间有幸深度参与客户机房服务器搬迁项目，全程跟进搬迁前的设备清点、备份、规划布局，搬迁中的设备拆卸、安全运
-输、精准部署与固定，以及搬迁后的系统调试、数据恢复工作。同时主导完成网络通路测试任务，运用专业测试工具对搬迁
-后服务器与网络设备的连通性、带宽稳定性、数据传输速率等关键指标进行全面检测，及时排查并解决通路中断、延迟过高
-等问题，确保服务器与各终端设备间网络链路通畅高效，最终助力搬迁项目顺利落地，保障客户业务无间断恢复运行。
-2025-06 〜 2025-09仓库管理系统全栈开发
-技术栈：Vue 3 + Element Plus + Axios + Flask（Python） + MySQL + Vue Router + Pinia
-项目简介
-独立设计并开发了一套轻量级但功能完整的仓库管理系统（WMS），实现对物料信息、入库/出库流程、库存状态的全流程数
-字化管理。系统采用前后端分离架构，支持多⻆色权限控制（管理员/员工），具备数据增删改查、实时统计、Excel导出等功
-能，有效提升仓储作业效率与数据准确性。
-2025-02 〜 2025-05湖北省技能大赛
-2025-2月我报名参加省级技能大赛鸿蒙开发赛道，以 “智能⻋辆控制” 为核心方向设计参赛作品。聚焦⻋辆基础操控需求，开
-发的鸿蒙系统专属 APP，可通过直观的交互界面实现对小⻋前进、后退、转向等核心动作的精准控制，响应灵敏且操作流
-畅。同时，为拓展产品实用性与可扩展性，提前预留空调控温、电子地图加载、实时⻋辆定位等功能 API 接口，为后续功能
-迭代与场景延伸奠定基础。赛事中，作品凭借稳定的性能、清晰的架构设计及良好的拓展性获得评委认可，最终斩获省级一
-等奖。
-2023-09 〜 2026-06武汉职业技术大学计算机应用 (大专)
-主修课程：Linux运维，前端HTML+CSS、VUE、Bootstrap、Element，Python自动化
-后端SpringBoot，Django
-数据库：MySql、达梦、Oracle
-计算机：计算机二级证书，前端擅⻓使用Vue+Element等框架，后端擅⻓使用SpringBoot、Django等框架
-熟练操作windows平台上的各类应用软件，如Word、Excel。
-团队能力：具有丰富的团队组建与扩充经验和项目管理与协调经验。
-工作积极认真，细心负责，熟练运用办公自动化软件，善于在工作中提出问题、发现问题、解决问题，有较强的分析力；勤
-奋好学，踏实肯干，动手能力强，认真负责，有很强的社会责任感；坚毅不拔，吃苦耐劳，喜欢迎接新挑战。
-基本信息
-求职意向
-实习经历
-项目经历
-教育背景
-技能特⻓
-自我评价
+## 项目概述
+
+QQ 机器人 × Claude Code 桥接项目 — 通过 WebSocket 接收 QQ 消息，转发给 Claude Code CLI（`claude -p`），再将回复发回 QQ。包含 Vue Web 管理界面，支持聊天记录查看和知识库管理。
+
+## 常用命令
+
+### 后端（项目根目录）
+```bash
+npm install          # 安装依赖
+npm run dev          # 启动机器人（tsx 热重载）
+npm run build        # 编译 TS → dist/
+npm run start        # 运行编译后的 JS
+npx tsc --noEmit     # 仅类型检查
+```
+
+### 前端（web/ 目录）
+```bash
+cd web && npm install
+npm run dev          # Vite 开发服务器 :5173，代理 /api → :3800
+npm run build        # vue-tsc + vite 构建
+```
+
+## 架构
+
+### 消息流程
+`QQ WebSocket → index.ts (handleMessage) → claude.ts (askClaude, 调用 CLI) → 通过 qq-bot-sdk 回复`
+
+### 后端模块（src/）
+- **index.ts** — 入口。连接 QQ WebSocket，处理收到的消息，发送回复（文字+图片）。包含截屏功能（PowerShell）。
+- **claude.ts** — 调用 `claude -p` 并传入 `--output-format json`。通过 slot 队列控制并发。知识库通过 `claude-workspace/CLAUDE.md` 注入。通过 `--resume <sessionId>` 恢复会话。
+- **config.ts** — 通过 dotenv 读取 `.env`，导出 `config` 对象和 `validateConfig()`。
+- **db.ts** — sql.js（WASM SQLite）。表：`messages`（聊天记录）、`knowledge`（上传的文档）。写入后自动 flush 到 `data/chat.db`。
+- **sessions.ts** — userId → Claude sessionId 映射。持久化到 `data/sessions.json`。`clearAllSessions()` 在知识库变更时调用。
+- **api.ts** — HTTP API 服务（Node `http` 模块）。启用 CORS。用户、消息、知识库 CRUD 路由。上传/删除知识库时：刷新 CLAUDE.md + 清空所有会话。
+- **parser.ts** — 文档解析器：PDF（pdf-parse v1.1.1）、DOCX（mammoth）、txt/md/csv/json（直接读取）。
+
+### 前端（web/src/）
+Vue 3 + Vite 5 + TypeScript。双面板布局，底部 Tab 切换（聊天记录 / 知识库）。
+- **api.ts** — Fetch 请求封装。上传文件用 base64 JSON（非 multipart）。
+- **components/** — UserList（侧边栏用户列表）、ChatView（聊天气泡）、KnowledgeView（拖拽上传 + 文档列表）。
+
+### 知识库数据流
+1. 用户通过 Web UI 上传文件 → POST `/api/knowledge`（base64）
+2. api.ts 解析文件，存入 SQLite `knowledge` 表
+3. 将所有知识库内容写入 `claude-workspace/CLAUDE.md`
+4. 清空所有会话（强制 Claude 重新读取 CLAUDE.md）
+5. Claude Code CLI 在 `claude-workspace/` 目录运行时自动读取 CLAUDE.md
+
+## 关键设计决策
+
+- **sql.js**（而非 better-sqlite3）— 纯 WASM，Windows 上无需原生编译。
+- **pdf-parse v1.1.1** — v2 在 Node 20.14 上报 DOMMatrix 未定义错误。
+- **CLAUDE.md 注入方式** — 知识库写入 `claude-workspace/CLAUDE.md` 而非通过 CLI 参数传递，因为 Windows shell 会破坏长中文文本参数。
+- **claude-workspace/** — Claude Code 在此子目录运行，避免看到机器人源码。
+- **Base64 文件上传** — 避免 Node http 服务端的 multipart 解析复杂度。
+- **Vite 5** — Vite 8 要求 Node 20.19+，本机为 Node 20.14。
+
+## 环境变量（.env）
+
+必填：`QQ_APP_ID`、`QQ_APP_SECRET`。可选：`QQ_SANDBOX`、`CLAUDE_PATH`、`MAX_CONCURRENT`、`CLAUDE_TIMEOUT`、`API_PORT`。
+
+## 测试
+
+无自动化测试。通过 QQ 消息手动测试。可用 SQLite 浏览器查看 `data/chat.db` 验证数据。

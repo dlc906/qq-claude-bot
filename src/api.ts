@@ -7,6 +7,9 @@ import {
 } from './db.js'
 import { parseFile, getFileType } from './parser.js'
 import { clearAllSessions } from './sessions.js'
+import { getSettings, getSettingsSafe, updateSettings } from './settings.js'
+
+const WORKSPACE = join(process.cwd(), 'claude-workspace')
 
 function setCors(res: http.ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -103,7 +106,7 @@ export function startApiServer(port: number): http.Server {
 
         // Refresh CLAUDE.md and clear sessions so next conversation picks up new knowledge
         const kbContent = getKnowledgeContent()
-        writeFileSync(join(process.cwd(), 'CLAUDE.md'), kbContent, 'utf-8')
+        writeFileSync(join(WORKSPACE, 'CLAUDE.md'), kbContent, 'utf-8')
         clearAllSessions()
 
         sendJson(res, 200, { id, filename, filetype, size: buffer.length })
@@ -117,9 +120,25 @@ export function startApiServer(port: number): http.Server {
         const deleted = deleteKnowledge(id)
         // Refresh CLAUDE.md and clear all sessions
         const content = getKnowledgeContent()
-        writeFileSync(join(process.cwd(), 'CLAUDE.md'), content, 'utf-8')
+        writeFileSync(join(WORKSPACE, 'CLAUDE.md'), content, 'utf-8')
         clearAllSessions()
         sendJson(res, 200, { deleted })
+        return
+      }
+
+      // ── Settings ─────────────────────────────────
+
+      // GET /api/settings
+      if (method === 'GET' && pathname === '/api/settings') {
+        sendJson(res, 200, getSettingsSafe())
+        return
+      }
+
+      // POST /api/settings
+      if (method === 'POST' && pathname === '/api/settings') {
+        const body = await readBody(req)
+        updateSettings(body as any)
+        sendJson(res, 200, getSettingsSafe())
         return
       }
 

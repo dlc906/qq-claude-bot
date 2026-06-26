@@ -1,4 +1,4 @@
-import type { UserRow, MessageRow, KnowledgeRow } from './types'
+import type { UserRow, MessageRow, KnowledgeRow, Settings } from './types'
 
 export async function fetchUsers(): Promise<UserRow[]> {
   const res = await fetch('/api/users')
@@ -45,5 +45,21 @@ export async function uploadKnowledge(file: File): Promise<{ id: number; filenam
 
 export async function deleteKnowledge(id: number): Promise<{ deleted: number }> {
   const res = await fetch(`/api/knowledge/${id}`, { method: 'DELETE' })
+  return res.json()
+}
+
+// ── Settings ────────────────────────────────────────
+
+export async function fetchSettings(): Promise<Settings> {
+  const res = await fetch('/api/settings')
+  return res.json()
+}
+
+export async function updateSettings(settings: Partial<Settings>): Promise<Settings> {
+  const res = await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  })
   return res.json()
 }

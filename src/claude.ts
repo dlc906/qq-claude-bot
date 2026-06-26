@@ -34,7 +34,8 @@ export interface ClaudeResult {
   sessionId: string | null
 }
 
-const CLAUDE_MD = join(process.cwd(), 'CLAUDE.md')
+const WORKSPACE = join(process.cwd(), 'claude-workspace')
+const CLAUDE_MD = join(WORKSPACE, 'CLAUDE.md')
 
 /**
  * Call Claude Code CLI in non-interactive mode
@@ -69,6 +70,7 @@ export async function askClaude(
 
   return new Promise<ClaudeResult>((resolve, reject) => {
     const proc = spawn(config.claudePath, args, {
+      cwd: WORKSPACE,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
       timeout: config.claudeTimeout,
