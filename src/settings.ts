@@ -4,10 +4,13 @@ import { join, dirname } from 'path'
 const SETTINGS_PATH = join(process.cwd(), 'data', 'settings.json')
 
 export interface Settings {
-  llmProvider: 'claude-code' | 'openai'
+  llmProvider: 'claude-code' | 'openai' | 'anthropic'
   openaiApiKey: string
   openaiBaseUrl: string
   openaiModel: string
+  anthropicApiKey: string
+  anthropicBaseUrl: string
+  anthropicModel: string
 }
 
 const defaults: Settings = {
@@ -15,6 +18,9 @@ const defaults: Settings = {
   openaiApiKey: '',
   openaiBaseUrl: 'https://api.openai.com/v1',
   openaiModel: 'gpt-4o',
+  anthropicApiKey: '',
+  anthropicBaseUrl: 'https://api.anthropic.com',
+  anthropicModel: 'claude-sonnet-4-20250514',
 }
 
 let settings: Settings = { ...defaults }
@@ -36,11 +42,13 @@ export function getSettings(): Settings {
 }
 
 /** Return settings with API key masked */
-export function getSettingsSafe(): Settings & { openaiApiKey: string } {
+export function getSettingsSafe(): Settings {
   const s = { ...settings }
   if (s.openaiApiKey) {
-    const key = s.openaiApiKey
-    s.openaiApiKey = '****' + key.slice(-4)
+    s.openaiApiKey = '****' + s.openaiApiKey.slice(-4)
+  }
+  if (s.anthropicApiKey) {
+    s.anthropicApiKey = '****' + s.anthropicApiKey.slice(-4)
   }
   return s
 }
@@ -52,6 +60,11 @@ export function updateSettings(partial: Partial<Settings>) {
   }
   if (partial.openaiBaseUrl !== undefined) settings.openaiBaseUrl = partial.openaiBaseUrl
   if (partial.openaiModel !== undefined) settings.openaiModel = partial.openaiModel
+  if (partial.anthropicApiKey !== undefined && !partial.anthropicApiKey.startsWith('****')) {
+    settings.anthropicApiKey = partial.anthropicApiKey
+  }
+  if (partial.anthropicBaseUrl !== undefined) settings.anthropicBaseUrl = partial.anthropicBaseUrl
+  if (partial.anthropicModel !== undefined) settings.anthropicModel = partial.anthropicModel
 
   mkdirSync(dirname(SETTINGS_PATH), { recursive: true })
   writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), 'utf-8')

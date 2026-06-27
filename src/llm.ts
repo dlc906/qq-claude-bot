@@ -3,6 +3,8 @@ import { writeFileSync } from 'fs'
 import { join } from 'path'
 import { config } from './config.js'
 import { getSettings } from './settings.js'
+import { clearSession } from './sessions.js'
+import { getHistory, appendHistory } from './histories.js'
 
 // ── Concurrency control ───────────────────────────────
 
@@ -48,6 +50,24 @@ async function askClaudeCode(
     writeFileSync(CLAUDE_MD, '', 'utf-8')
   }
 
+  // Try with session first, retry without if session not found
+  try {
+    return await callClaudeCLI(prompt, sessionId, knowledgeContext)
+  } catch (err: any) {
+    if (sessionId && err.message?.includes('No conversation found')) {
+      console.log(`[claude] Session ${sessionId} not found, retrying without session`)
+      clearSession(sessionId)
+      return await callClaudeCLI(prompt, undefined, knowledgeContext)
+    }
+    throw err
+  }
+}
+
+function callClaudeCLI(
+  prompt: string,
+  sessionId?: string,
+  knowledgeContext?: string
+): Promise<LLMResult> {
   const args = [
     '-p', prompt,
     '--output-format', 'json',
@@ -92,9 +112,6 @@ interface ChatMessage {
   content: string
 }
 
-// Per-user conversation history for OpenAI sessions
-const chatHistories = new Map<string, ChatMessage[]>()
-
 async function askOpenAI(
   prompt: string,
   sessionId?: string,
@@ -102,20 +119,20 @@ async function askOpenAI(
 ): Promise<LLMResult> {
   const settings = getSettings()
   const userId = sessionId || '__default__'
+  const historyKey = `openai:${userId}`
 
-  // Build messages
   const messages: ChatMessage[] = []
 
-  // System prompt with knowledge
   if (knowledgeContext) {
     messages.push({ role: 'system', content: `你是一个有帮助的AI助手。以下是参考知识库内容：\n\n${knowledgeContext}` })
   } else {
     messages.push({ role: 'system', content: '你是一个有帮助的AI助手。' })
   }
 
-  // Load existing history if resuming
-  if (sessionId && chatHistories.has(userId)) {
-    messages.push(...chatHistories.get(userId)!)
+  // Load persisted history
+  const history = getHistory(historyKey)
+  if (history.length > 0) {
+    messages.push(...history.map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })))
   }
 
   messages.push({ role: 'user', content: prompt })
@@ -140,20 +157,69 @@ async function askOpenAI(
   const data = await res.json() as any
   const reply = data.choices?.[0]?.message?.content || ''
 
-  // Save history for this user
-  const history = chatHistories.get(userId) || []
-  history.push({ role: 'user', content: prompt })
-  history.push({ role: 'assistant', content: reply })
-  // Keep last 20 turns to avoid token overflow
-  if (history.length > 40) history.splice(0, history.length - 40)
-  chatHistories.set(userId, history)
+  // Persist history
+  appendHistory(historyKey, prompt, reply)
 
   return { response: reply, sessionId: userId }
 }
 
-/** Clear OpenAI chat history for a user */
-export function clearOpenAISession(userId: string) {
-  chatHistories.delete(userId)
+// ── Anthropic API ──────────────────────────────────────
+
+interface AnthropicMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+async function askAnthropic(
+  prompt: string,
+  sessionId?: string,
+  knowledgeContext?: string
+): Promise<LLMResult> {
+  const settings = getSettings()
+  const userId = sessionId || '__default__'
+  const historyKey = `anthropic:${userId}`
+
+  const systemPrompt = knowledgeContext
+    ? `你是一个有帮助的AI助手。以下是参考知识库内容：\n\n${knowledgeContext}`
+    : '你是一个有帮助的AI助手。'
+
+  const messages: AnthropicMessage[] = []
+
+  // Load persisted history
+  const history = getHistory(historyKey)
+  if (history.length > 0) {
+    messages.push(...history.map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })))
+  }
+
+  messages.push({ role: 'user', content: prompt })
+
+  const res = await fetch(`${settings.anthropicBaseUrl}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': settings.anthropicApiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: settings.anthropicModel,
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages,
+    }),
+  })
+
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Anthropic API error ${res.status}: ${body}`)
+  }
+
+  const data = await res.json() as any
+  const reply = data.content?.[0]?.text || ''
+
+  // Persist history
+  appendHistory(historyKey, prompt, reply)
+
+  return { response: reply, sessionId: userId }
 }
 
 // ── Unified entry point ───────────────────────────────
@@ -170,6 +236,8 @@ export async function askLLM(
 
     if (settings.llmProvider === 'openai') {
       return await askOpenAI(prompt, sessionId, knowledgeContext)
+    } else if (settings.llmProvider === 'anthropic') {
+      return await askAnthropic(prompt, sessionId, knowledgeContext)
     } else {
       return await askClaudeCode(prompt, sessionId, knowledgeContext)
     }

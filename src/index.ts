@@ -5,9 +5,10 @@ import { tmpdir } from 'os'
 import { config, validateConfig } from './config.js'
 import { askLLM } from './llm.js'
 import { loadSessions, getSession, saveSession, clearSession } from './sessions.js'
-import { initDb, closeDb, insertMessage } from './db.js'
+import { initDb, closeDb, insertMessage, searchKnowledge } from './db.js'
 import { startApiServer, getKnowledgeContent } from './api.js'
-import { loadSettings } from './settings.js'
+import { loadSettings, getSettings } from './settings.js'
+import { loadHistories, clearHistory } from './histories.js'
 import { createOpenAPI, createWebsocket, AvailableIntentsEventsEnum } from 'qq-bot-sdk'
 
 const client = createOpenAPI({
@@ -43,6 +44,10 @@ async function handleMessage(data: any) {
   // Special commands
   if (content === '/clear') {
     clearSession(userId)
+    const provider = getSettings().llmProvider
+    if (provider !== 'claude-code') {
+      clearHistory(`${provider}:${userId}`)
+    }
     await sendText(msg, 'Session cleared.')
     return
   }
@@ -76,7 +81,11 @@ async function handleMessage(data: any) {
 
   try {
     const existingSession = getSession(userId)
-    const knowledge = getKnowledgeContent()
+    // Claude Code reads CLAUDE.md directly; OpenAI/Anthropic get relevant snippets only
+    const provider = getSettings().llmProvider
+    const knowledge = provider === 'claude-code'
+      ? getKnowledgeContent()
+      : searchKnowledge(prompt)
     const result = await askLLM(prompt, existingSession ?? undefined, knowledge || undefined)
 
     // Persist session for next call
@@ -305,6 +314,7 @@ ws.on('CLOSED', () => console.error('[ws] Connection closed'))
 
 validateConfig()
 loadSettings()
+loadHistories()
 loadSessions()
 await initDb()
 startApiServer(config.apiPort)

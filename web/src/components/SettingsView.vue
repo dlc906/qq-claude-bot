@@ -28,11 +28,21 @@
             </div>
           </div>
         </label>
+        <label class="provider-option" :class="{ selected: form.llmProvider === 'anthropic' }">
+          <input type="radio" value="anthropic" v-model="form.llmProvider" />
+          <div class="option-content">
+            <div class="option-icon">✨</div>
+            <div>
+              <div class="option-title">Anthropic API</div>
+              <div class="option-desc">Claude 直连 API（Sonnet / Opus 等）</div>
+            </div>
+          </div>
+        </label>
       </div>
     </div>
 
     <div class="settings-card" v-if="form.llmProvider === 'openai'">
-      <div class="card-title">API 配置</div>
+      <div class="card-title">OpenAI 配置</div>
       <div class="form-grid">
         <div class="form-group">
           <label>API Key</label>
@@ -45,6 +55,24 @@
         <div class="form-group">
           <label>模型名称</label>
           <input type="text" v-model="form.openaiModel" placeholder="gpt-4o" />
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-card" v-if="form.llmProvider === 'anthropic'">
+      <div class="card-title">Anthropic 配置</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="password" v-model="form.anthropicApiKey" placeholder="sk-ant-..." />
+        </div>
+        <div class="form-group">
+          <label>Base URL</label>
+          <input type="text" v-model="form.anthropicBaseUrl" placeholder="https://api.anthropic.com" />
+        </div>
+        <div class="form-group">
+          <label>模型名称</label>
+          <input type="text" v-model="form.anthropicModel" placeholder="claude-sonnet-4-20250514" />
         </div>
       </div>
     </div>
@@ -71,6 +99,9 @@ const form = ref<Settings>({
   openaiApiKey: '',
   openaiBaseUrl: 'https://api.openai.com/v1',
   openaiModel: 'gpt-4o',
+  anthropicApiKey: '',
+  anthropicBaseUrl: 'https://api.anthropic.com',
+  anthropicModel: 'claude-sonnet-4-20250514',
 })
 const saving = ref(false)
 const saved = ref(false)

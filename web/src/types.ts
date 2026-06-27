@@ -25,8 +25,11 @@ export interface KnowledgeRow {
 }
 
 export interface Settings {
-  llmProvider: 'claude-code' | 'openai'
+  llmProvider: 'claude-code' | 'openai' | 'anthropic'
   openaiApiKey: string
   openaiBaseUrl: string
   openaiModel: string
+  anthropicApiKey: string
+  anthropicBaseUrl: string
+  anthropicModel: string
 }

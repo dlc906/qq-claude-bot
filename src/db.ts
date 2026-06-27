@@ -195,6 +195,57 @@ export function getKnowledgeContent(): string {
     .join('\n\n')
 }
 
+/** Search knowledge by keywords — returns matching document snippets */
+export function searchKnowledge(query: string, maxChars = 3000): string {
+  // Extract meaningful keywords (>= 2 chars, skip common stop words)
+  const stopWords = new Set(['的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '一个', '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没有', '看', '好', '自己', '这'])
+  const words = query
+    .replace(/[^一-龥a-zA-Z0-9]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 2 && !stopWords.has(w))
+    .slice(0, 8) // max 8 keywords
+
+  if (words.length === 0) return ''
+
+  // Build WHERE clause with OR conditions
+  const conditions = words.map(() => 'content LIKE ?').join(' OR ')
+  const params = words.map(w => `%${w}%`)
+
+  const stmt = db.prepare(
+    `SELECT filename, content FROM knowledge WHERE ${conditions} ORDER BY created_at ASC`
+  )
+  stmt.bind(params)
+
+  const results: string[] = []
+  let totalChars = 0
+
+  while (stmt.step()) {
+    const row = stmt.getAsObject()
+    const filename = row.filename as string
+    const content = row.content as string
+
+    // Find the first matching keyword position and extract a snippet around it
+    let bestPos = 0
+    for (const word of words) {
+      const pos = content.toLowerCase().indexOf(word.toLowerCase())
+      if (pos >= 0) { bestPos = pos; break }
+    }
+
+    const start = Math.max(0, bestPos - 200)
+    const end = Math.min(content.length, bestPos + 1500)
+    const snippet = (start > 0 ? '...' : '') + content.slice(start, end) + (end < content.length ? '...' : '')
+
+    const entry = `[文档: ${filename}]\n${snippet}`
+    totalChars += entry.length
+
+    if (totalChars > maxChars) break
+    results.push(entry)
+  }
+  stmt.free()
+
+  return results.join('\n\n')
+}
+
 /** Delete a knowledge document */
 export function deleteKnowledge(id: number): number {
   db.run('DELETE FROM knowledge WHERE id = ?', [id])
