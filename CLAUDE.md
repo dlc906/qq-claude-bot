@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 工作规则
+
+1. **提交代码前必须先更新 README.md 和 CLAUDE.md**，确保文档与代码同步
+2. 不要每次对话完就自动提交 git
+
 ## 项目概述
 
 QQ 机器人 × Claude Code 桥接项目 — 通过 WebSocket 接收 QQ 消息，转发给 LLM（Claude Code CLI / OpenAI 兼容 API / Anthropic API），再将回复发回 QQ。包含 Vue Web 管理界面，支持聊天记录查看和知识库管理。
