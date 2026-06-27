@@ -22,7 +22,7 @@ function sendJson(res: http.ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data))
 }
 
-/** Read full request body as JSON */
+/** 读取完整的请求体并解析为 JSON */
 function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
@@ -42,7 +42,7 @@ export function startApiServer(port: number): http.Server {
   const server = http.createServer(async (req, res) => {
     setCors(res)
 
-    // CORS preflight
+    // CORS 预检请求
     if (req.method === 'OPTIONS') {
       res.writeHead(204)
       res.end()
@@ -54,7 +54,7 @@ export function startApiServer(port: number): http.Server {
     const method = req.method
 
     try {
-      // ── Messages ────────────────────────────────
+      // ── 消息 ─────────────────────────────────────
 
       // GET /api/users
       if (method === 'GET' && pathname === '/api/users') {
@@ -80,7 +80,7 @@ export function startApiServer(port: number): http.Server {
         return
       }
 
-      // ── Knowledge base ──────────────────────────
+      // ── 知识库 ──────────────────────────────────
 
       // GET /api/knowledge — list
       if (method === 'GET' && pathname === '/api/knowledge') {
@@ -88,11 +88,11 @@ export function startApiServer(port: number): http.Server {
         return
       }
 
-      // POST /api/knowledge — upload (JSON body: { filename, data (base64) })
+      // POST /api/knowledge — 上传（JSON body: { filename, data (base64) }）
       if (method === 'POST' && pathname === '/api/knowledge') {
         const body = await readBody(req)
         const filename = body.filename as string
-        const data = body.data as string // base64
+        const data = body.data as string // base64 编码
 
         if (!filename || !data) {
           sendJson(res, 400, { error: 'Missing filename or data' })
@@ -104,7 +104,7 @@ export function startApiServer(port: number): http.Server {
         const filetype = getFileType(filename)
         const id = insertKnowledge(filename, content, filetype, buffer.length)
 
-        // Refresh CLAUDE.md and clear sessions so next conversation picks up new knowledge
+        // 刷新 CLAUDE.md 并清除会话，让下次对话使用新知识
         const kbContent = getKnowledgeContent()
         writeFileSync(join(WORKSPACE, 'CLAUDE.md'), kbContent, 'utf-8')
         clearAllSessions()
@@ -118,7 +118,7 @@ export function startApiServer(port: number): http.Server {
       if (method === 'DELETE' && kbDeleteMatch) {
         const id = parseInt(kbDeleteMatch[1])
         const deleted = deleteKnowledge(id)
-        // Refresh CLAUDE.md and clear all sessions
+        // 刷新 CLAUDE.md 并清除所有会话
         const content = getKnowledgeContent()
         writeFileSync(join(WORKSPACE, 'CLAUDE.md'), content, 'utf-8')
         clearAllSessions()
@@ -126,7 +126,7 @@ export function startApiServer(port: number): http.Server {
         return
       }
 
-      // ── Settings ─────────────────────────────────
+      // ── 设置 ─────────────────────────────────────
 
       // GET /api/settings
       if (method === 'GET' && pathname === '/api/settings') {
@@ -156,5 +156,5 @@ export function startApiServer(port: number): http.Server {
   return server
 }
 
-/** Export for use in index.ts — get knowledge context for Claude */
+/** 导出供 index.ts 使用 — 获取 Claude 的知识上下文 */
 export { getKnowledgeContent }

@@ -2,6 +2,7 @@ node_modules/
 data/
 claude-workspace/
 .env
+CLAUDE.md
 *.db
 .codegraph/
 .claude/

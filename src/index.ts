@@ -5,8 +5,8 @@ import { tmpdir } from 'os'
 import { config, validateConfig } from './config.js'
 import { askLLM } from './llm.js'
 import { loadSessions, getSession, saveSession, clearSession } from './sessions.js'
-import { initDb, closeDb, insertMessage, searchKnowledge } from './db.js'
-import { startApiServer, getKnowledgeContent } from './api.js'
+import { initDb, closeDb, insertMessage } from './db.js'
+import { startApiServer } from './api.js'
 import { loadSettings, getSettings } from './settings.js'
 import { loadHistories, clearHistory } from './histories.js'
 import { createOpenAPI, createWebsocket, AvailableIntentsEventsEnum } from 'qq-bot-sdk'
@@ -24,7 +24,7 @@ const ws: any = createWebsocket({
   intents: [AvailableIntentsEventsEnum.GROUP_AND_C2C_EVENT],
 })
 
-// ── Message handler ──────────────────────────────────
+// ── 消息处理 ─────────────────────────────────────────
 
 let msgSeq = 0
 
@@ -36,12 +36,12 @@ async function handleMessage(data: any) {
   const content = (msg.content || '').trim()
   const msgId = msg.id
 
-  // Log incoming message
+  // 记录收到的消息
   const hasImage = msg.attachments?.length > 0 || msg.media
   console.log(`[msg] ${userId}: ${content || '(no text)'} ${hasImage ? '[has image]' : ''}`)
   insertMessage(userId, msg.author?.nickname || '', content, 'user')
 
-  // Special commands
+  // 特殊命令
   if (content === '/clear') {
     clearSession(userId)
     const provider = getSettings().llmProvider
@@ -52,7 +52,7 @@ async function handleMessage(data: any) {
     return
   }
 
-  // Screenshot command — handled by bot directly, not Claude
+  // 截屏命令 — 由机器人直接处理，不转发给 Claude
   if (content === '/screenshot' || content === '/截屏' || content.includes('截屏') || content.includes('截图') || content.includes('screenshot')) {
     await sendText(msg, '📸 截屏中...').catch(() => null)
     try {
@@ -65,7 +65,7 @@ async function handleMessage(data: any) {
     return
   }
 
-  // Build prompt with image info
+  // 构造包含图片信息的提示词
   let prompt = content
   if (hasImage) {
     const imageUrls = (msg.attachments || []).map((a: any) => a.url || a.proxy_url).filter(Boolean)
@@ -76,19 +76,14 @@ async function handleMessage(data: any) {
 
   if (!prompt) return
 
-  // Show thinking indicator
+  // 显示思考中提示
   await sendText(msg, '🤔 思考中...').catch(() => null)
 
   try {
     const existingSession = getSession(userId)
-    // Claude Code reads CLAUDE.md directly; OpenAI/Anthropic get relevant snippets only
-    const provider = getSettings().llmProvider
-    const knowledge = provider === 'claude-code'
-      ? getKnowledgeContent()
-      : searchKnowledge(prompt)
-    const result = await askLLM(prompt, existingSession ?? undefined, knowledge || undefined)
+    const result = await askLLM(prompt, existingSession ?? undefined)
 
-    // Persist session for next call
+    // 持久化会话 ID 供下次使用
     if (result.sessionId) {
       saveSession(userId, result.sessionId)
     }
@@ -97,17 +92,17 @@ async function handleMessage(data: any) {
     console.log(`[msg] Claude replied: ${response.slice(0, 100)}...`)
     insertMessage(userId, '', response.slice(0, 5000), 'assistant', result.sessionId ?? '')
 
-    // Check if response contains image paths (from Claude Code screenshots)
+    // 检查回复中是否包含图片路径（来自 Claude Code 截屏）
     const imagePaths = extractImagePaths(response)
 
     if (imagePaths.length > 0) {
-      // Send images + text
+      // 发送图片 + 文字
       for (const imgPath of imagePaths) {
         await sendImage(msg, imgPath).catch((err: any) => {
           console.error(`[img] Failed to send ${imgPath}:`, err.message || err)
         })
       }
-      // Send remaining text (without image paths)
+      // 发送剩余文字（去掉图片路径）
       const textOnly = removeImagePaths(response).trim()
       if (textOnly) await sendText(msg, textOnly.slice(0, 2000))
     } else {
@@ -123,7 +118,7 @@ async function handleMessage(data: any) {
   }
 }
 
-// ── Screenshot ───────────────────────────────────────
+// ── 截屏功能 ─────────────────────────────────────────
 
 const SCREENSHOT_DIR = join(tmpdir(), 'claude-qq-screenshots')
 
@@ -134,7 +129,7 @@ async function takeScreenshot(): Promise<string> {
   const filepath = join(SCREENSHOT_DIR, filename)
   const forwardPath = filepath.replace(/\\/g, '/')
 
-  // Write PS1 script to temp file (avoids escaping issues)
+  // 写 PS1 脚本到临时文件（避免转义问题）
   const scriptPath = join(SCREENSHOT_DIR, '_capture.ps1')
   const psScript = [
     'Add-Type -AssemblyName System.Windows.Forms',
@@ -166,12 +161,12 @@ async function takeScreenshot(): Promise<string> {
     console.error(`[screenshot] PS stdout: ${err.stdout}`)
     throw err
   } finally {
-    // Cleanup script file
+    // 清理脚本文件
     try { unlinkSync(scriptPath) } catch {}
   }
 }
 
-// ── Send text ────────────────────────────────────────
+// ── 发送文字 ─────────────────────────────────────────
 
 async function sendText(msg: any, content: string): Promise<any> {
   const userId = msg.author?.user_openid
@@ -185,25 +180,25 @@ async function sendText(msg: any, content: string): Promise<any> {
   }
 }
 
-// ── Send image (upload → send) ───────────────────────
+// ── 发送图片（上传 → 发送） ─────────────────────────
 
 async function sendImage(msg: any, filePath: string): Promise<any> {
   const userId = msg.author?.user_openid
   msgSeq++
 
-  // Read file and convert to base64
+  // 读取文件并转为 base64
   const fileBuffer = readFileSync(filePath)
   const base64Data = fileBuffer.toString('base64')
 
   console.log(`[img] Uploading ${filePath} (${fileBuffer.length} bytes)`)
 
-  // Step 1: Upload file → get file_info
+  // 第一步：上传文件 → 获取 file_info
   let fileRes: any
   if (msg.group_id) {
     fileRes = await client.groupApi.postFile(msg.group_id, {
       file_type: 1, // image
       file_data: base64Data,
-      srv_send_msg: false, // don't send yet, just get file_info
+      srv_send_msg: false, // 不立即发送，只获取 file_info
     })
   } else if (userId) {
     fileRes = await client.c2cApi.postFile(userId, {
@@ -219,9 +214,9 @@ async function sendImage(msg: any, filePath: string): Promise<any> {
 
   console.log(`[img] Uploaded, file_info: ${fileRes.data.file_info.slice(0, 50)}...`)
 
-  // Step 2: Send rich media message
+  // 第二步：发送富媒体消息
   const sendBody = {
-    msg_type: 7, // rich media
+    msg_type: 7, // 富媒体
     media: { file_info: fileRes.data.file_info },
     msg_id: msg.id,
     msg_seq: msgSeq,
@@ -234,7 +229,7 @@ async function sendImage(msg: any, filePath: string): Promise<any> {
   }
 }
 
-// ── Send image from URL ──────────────────────────────
+// ── 通过 URL 发送图片 ────────────────────────────────
 
 async function sendImageFromUrl(msg: any, url: string): Promise<any> {
   const userId = msg.author?.user_openid
@@ -275,9 +270,9 @@ async function sendImageFromUrl(msg: any, url: string): Promise<any> {
   }
 }
 
-// ── Image path detection ─────────────────────────────
+// ── 图片路径检测 ─────────────────────────────────────
 
-// Match common image file paths in Claude's response
+// 匹配回复中常见的图片文件路径
 const IMAGE_PATH_PATTERN = /(?:^|\s)([^\s"'`]+\.(?:png|jpg|jpeg|gif|webp|bmp))(?:\s|$|["'`])/gi
 
 function extractImagePaths(text: string): string[] {
@@ -285,7 +280,7 @@ function extractImagePaths(text: string): string[] {
   let match
   while ((match = IMAGE_PATH_PATTERN.exec(text)) !== null) {
     const p = match[1]
-    // Filter out obvious non-paths (URLs, node_modules, etc.)
+    // 过滤掉明显的非路径（URL、node_modules 等）
     if (p.startsWith('http') || p.includes('node_modules')) continue
     paths.push(p)
   }
@@ -296,7 +291,7 @@ function removeImagePaths(text: string): string {
   return text.replace(IMAGE_PATH_PATTERN, ' ')
 }
 
-// ── Events ───────────────────────────────────────────
+// ── 事件处理 ─────────────────────────────────────────
 
 ws.on(AvailableIntentsEventsEnum.GROUP_AND_C2C_EVENT, (data: any) => {
   console.log(`[ws] EVENT:`, JSON.stringify(data).slice(0, 300))
@@ -310,7 +305,7 @@ ws.on('INVALID_SESSION', () => console.error('[ws] Invalid session'))
 ws.on('RECONNECT', () => console.log('[ws] Reconnecting...'))
 ws.on('CLOSED', () => console.error('[ws] Connection closed'))
 
-// ── Start ────────────────────────────────────────────
+// ── 启动 ─────────────────────────────────────────────
 
 validateConfig()
 loadSettings()

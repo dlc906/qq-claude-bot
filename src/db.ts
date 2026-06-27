@@ -33,7 +33,7 @@ export interface KnowledgeRow {
   created_at: number
 }
 
-/** Initialize SQLite database (async because sql.js loads WASM) */
+/** 初始化 SQLite 数据库（异步，因为 sql.js 加载 WASM） */
 export async function initDb(): Promise<void> {
   const SQL = await initSqlJs()
 
@@ -74,13 +74,13 @@ export async function initDb(): Promise<void> {
   console.log('[db] SQLite initialized')
 }
 
-/** Persist database to disk */
+/** 将数据库持久化到磁盘 */
 function flush() {
   const data = db.export()
   writeFileSync(DB_PATH, Buffer.from(data))
 }
 
-/** Insert a message */
+/** 插入一条消息 */
 export function insertMessage(
   userId: string,
   nickname: string,
@@ -95,7 +95,7 @@ export function insertMessage(
   flush()
 }
 
-/** Get all users with last message preview */
+/** 获取所有用户及最后一条消息预览 */
 export function getUsers(): UserRow[] {
   const rows = db.exec(`
     SELECT
@@ -124,7 +124,7 @@ export function getUsers(): UserRow[] {
   }))
 }
 
-/** Get messages for a user (chronological) */
+/** 获取某用户的消息（按时间正序） */
 export function getMessages(userId: string, limit = 100, offset = 0): MessageRow[] {
   const stmt = db.prepare(
     'SELECT * FROM messages WHERE user_id = ? ORDER BY timestamp ASC LIMIT ? OFFSET ?'
@@ -148,7 +148,7 @@ export function getMessages(userId: string, limit = 100, offset = 0): MessageRow
   return results
 }
 
-/** Delete all messages for a user */
+/** 删除某用户的所有消息 */
 export function deleteUserMessages(userId: string): number {
   db.run('DELETE FROM messages WHERE user_id = ?', [userId])
   flush()
@@ -157,9 +157,9 @@ export function deleteUserMessages(userId: string): number {
   return rows.length > 0 ? (rows[0].values[0][0] as number) : 0
 }
 
-// ── Knowledge base ──────────────────────────────────
+// ── 知识库 ──────────────────────────────────────────
 
-/** Insert a knowledge document */
+/** 插入知识库文档 */
 export function insertKnowledge(filename: string, content: string, filetype: string, size: number): number {
   db.run(
     'INSERT INTO knowledge (filename, content, filetype, size, created_at) VALUES (?, ?, ?, ?, unixepoch())',
@@ -171,7 +171,7 @@ export function insertKnowledge(filename: string, content: string, filetype: str
   return rows.length > 0 ? (rows[0].values[0][0] as number) : 0
 }
 
-/** List all knowledge documents (without full content) */
+/** 列出所有知识库文档（不含正文内容） */
 export function getKnowledgeList(): Omit<KnowledgeRow, 'content'>[] {
   const rows = db.exec('SELECT id, filename, filetype, size, created_at FROM knowledge ORDER BY created_at DESC')
   if (rows.length === 0) return []
@@ -185,7 +185,7 @@ export function getKnowledgeList(): Omit<KnowledgeRow, 'content'>[] {
   }))
 }
 
-/** Get all knowledge content (for Claude context injection) */
+/** 获取全部知识库内容（用于 Claude 上下文注入） */
 export function getKnowledgeContent(): string {
   const rows = db.exec('SELECT filename, content FROM knowledge ORDER BY created_at ASC')
   if (rows.length === 0) return ''
@@ -195,21 +195,45 @@ export function getKnowledgeContent(): string {
     .join('\n\n')
 }
 
-/** Search knowledge by keywords — returns matching document snippets */
+/** 按关键词搜索知识库 — 返回匹配的文档片段 */
 export function searchKnowledge(query: string, maxChars = 3000): string {
-  // Extract meaningful keywords (>= 2 chars, skip common stop words)
-  const stopWords = new Set(['的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '一个', '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没有', '看', '好', '自己', '这'])
-  const words = query
-    .replace(/[^一-龥a-zA-Z0-9]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length >= 2 && !stopWords.has(w))
-    .slice(0, 8) // max 8 keywords
+  // 中文提取 2-4 字 n-gram 作为关键词，英文按空格分词
+  const words: string[] = []
 
-  if (words.length === 0) return ''
+  // 提取中文字符和英文单词
+  const chineseChars = query.match(/[一-鿿]+/g) || []
+  const englishWords = query.match(/[a-zA-Z0-9]{2,}/g) || []
 
-  // Build WHERE clause with OR conditions
-  const conditions = words.map(() => 'content LIKE ?').join(' OR ')
-  const params = words.map(w => `%${w}%`)
+  // 从中文片段生成 n-gram（2字和3字）
+  for (const seg of chineseChars) {
+    if (seg.length <= 4) {
+      words.push(seg) // 短片段直接使用
+    } else {
+      for (let i = 0; i <= seg.length - 2; i++) {
+        words.push(seg.slice(i, i + 2))
+      }
+      for (let i = 0; i <= seg.length - 3; i++) {
+        words.push(seg.slice(i, i + 3))
+      }
+    }
+  }
+
+  words.push(...englishWords)
+
+  // 去重并限制数量
+  const unique = [...new Set(words)].slice(0, 15)
+
+  console.log(`[kb] search keywords:`, unique)
+
+  if (unique.length === 0) {
+    const list = getKnowledgeList()
+    if (list.length === 0) return ''
+    return `[知识库文档: ${list.map(d => d.filename).join(', ')}]`
+  }
+
+  // 构造 WHERE 子句 — 匹配任意关键词
+  const conditions = unique.map(() => 'content LIKE ?').join(' OR ')
+  const params = unique.map(w => `%${w}%`)
 
   const stmt = db.prepare(
     `SELECT filename, content FROM knowledge WHERE ${conditions} ORDER BY created_at ASC`
@@ -224,10 +248,11 @@ export function searchKnowledge(query: string, maxChars = 3000): string {
     const filename = row.filename as string
     const content = row.content as string
 
-    // Find the first matching keyword position and extract a snippet around it
+    // 查找最佳匹配位置
     let bestPos = 0
-    for (const word of words) {
-      const pos = content.toLowerCase().indexOf(word.toLowerCase())
+    const contentLower = content.toLowerCase()
+    for (const word of unique) {
+      const pos = contentLower.indexOf(word.toLowerCase())
       if (pos >= 0) { bestPos = pos; break }
     }
 
@@ -243,10 +268,17 @@ export function searchKnowledge(query: string, maxChars = 3000): string {
   }
   stmt.free()
 
+  console.log(`[kb] found ${results.length} matching docs, total ${totalChars} chars`)
+
+  // 无匹配时降级为全量知识库内容
+  if (results.length === 0) {
+    return getKnowledgeContent()
+  }
+
   return results.join('\n\n')
 }
 
-/** Delete a knowledge document */
+/** 删除知识库文档 */
 export function deleteKnowledge(id: number): number {
   db.run('DELETE FROM knowledge WHERE id = ?', [id])
   flush()
@@ -255,7 +287,7 @@ export function deleteKnowledge(id: number): number {
   return rows.length > 0 ? (rows[0].values[0][0] as number) : 0
 }
 
-/** Close database */
+/** 关闭数据库 */
 export function closeDb() {
   if (db) {
     flush()

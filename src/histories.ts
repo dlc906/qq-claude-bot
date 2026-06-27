@@ -25,30 +25,30 @@ function flush() {
   writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf-8')
 }
 
-/** Get conversation history for a provider+user combo */
+/** 获取指定 provider+用户 的对话历史 */
 export function getHistory(key: string): Array<{ role: string; content: string }> {
   return store[key] || []
 }
 
-/** Append a turn to history and persist */
+/** 追加一轮对话并持久化 */
 export function appendHistory(key: string, userMsg: string, assistantMsg: string, maxTurns = 20) {
   if (!store[key]) store[key] = []
   store[key].push({ role: 'user', content: userMsg })
   store[key].push({ role: 'assistant', content: assistantMsg })
-  // Keep last N turns (each turn = 2 messages)
+  // 只保留最近 N 轮（每轮 = 2 条消息）
   if (store[key].length > maxTurns * 2) {
     store[key] = store[key].slice(-(maxTurns * 2))
   }
   flush()
 }
 
-/** Clear history for a key */
+/** 清除指定 key 的历史 */
 export function clearHistory(key: string) {
   delete store[key]
   flush()
 }
 
-/** Clear all histories */
+/** 清除所有历史 */
 export function clearAllHistories() {
   store = {}
   flush()

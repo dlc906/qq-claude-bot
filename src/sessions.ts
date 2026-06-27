@@ -9,7 +9,7 @@ interface SessionStore {
 
 let store: SessionStore = {}
 
-/** Load session map from disk */
+/** 从磁盘加载会话映射 */
 export function loadSessions() {
   if (existsSync(STORE_PATH)) {
     try {
@@ -21,25 +21,25 @@ export function loadSessions() {
   }
 }
 
-/** Get stored session ID for a user (undefined if none) */
+/** 获取用户的会话 ID（无则返回 undefined） */
 export function getSession(userId: string): string | undefined {
   return store[userId]
 }
 
-/** Save session ID for a user and persist to disk */
+/** 保存用户的会话 ID 并持久化到磁盘 */
 export function saveSession(userId: string, sessionId: string) {
   store[userId] = sessionId
   mkdirSync(dirname(STORE_PATH), { recursive: true })
   writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf-8')
 }
 
-/** Clear session for a user */
+/** 清除用户的会话 */
 export function clearSession(userId: string) {
   delete store[userId]
   writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf-8')
 }
 
-/** Clear all sessions (e.g. after knowledge base change) */
+/** 清除所有会话（如知识库变更时） */
 export function clearAllSessions() {
   store = {}
   writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf-8')

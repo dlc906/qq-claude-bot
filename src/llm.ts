@@ -5,8 +5,9 @@ import { config } from './config.js'
 import { getSettings } from './settings.js'
 import { clearSession } from './sessions.js'
 import { getHistory, appendHistory } from './histories.js'
+import { getKnowledgeContent, searchKnowledge } from './db.js'
 
-// ── Concurrency control ───────────────────────────────
+// ── 并发控制 ─────────────────────────────────────────
 
 let activeCalls = 0
 const waitQueue: (() => void)[] = []
@@ -27,7 +28,7 @@ function releaseSlot() {
   if (waitQueue.length > 0) waitQueue.shift!()
 }
 
-// ── Types ─────────────────────────────────────────────
+// ── 类型定义 ─────────────────────────────────────────
 
 export interface LLMResult {
   response: string
@@ -50,7 +51,7 @@ async function askClaudeCode(
     writeFileSync(CLAUDE_MD, '', 'utf-8')
   }
 
-  // Try with session first, retry without if session not found
+  // 先尝试带 session，失败后去掉 session 重试
   try {
     return await callClaudeCLI(prompt, sessionId, knowledgeContext)
   } catch (err: any) {
@@ -105,7 +106,14 @@ function callClaudeCLI(
   })
 }
 
-// ── OpenAI Compatible API ─────────────────────────────
+// ── 系统提示词构建 ───────────────────────────────────
+
+function buildSystemPrompt(knowledgeContext?: string): string {
+  if (!knowledgeContext) return '你是一个有帮助的AI助手。'
+  return `你是一个有帮助的AI助手。请参考以下知识库内容回答问题。回答时使用自然的格式，不要滥用标题符号，适当使用列表和段落让内容更易读。\n\n<知识库>\n${knowledgeContext}\n</知识库>`
+}
+
+// ── OpenAI 兼容 API ──────────────────────────────────
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
@@ -121,15 +129,9 @@ async function askOpenAI(
   const userId = sessionId || '__default__'
   const historyKey = `openai:${userId}`
 
-  const messages: ChatMessage[] = []
+  const messages: ChatMessage[] = [{ role: 'system', content: buildSystemPrompt(knowledgeContext) }]
 
-  if (knowledgeContext) {
-    messages.push({ role: 'system', content: `你是一个有帮助的AI助手。以下是参考知识库内容：\n\n${knowledgeContext}` })
-  } else {
-    messages.push({ role: 'system', content: '你是一个有帮助的AI助手。' })
-  }
-
-  // Load persisted history
+  // 加载持久化的对话历史
   const history = getHistory(historyKey)
   if (history.length > 0) {
     messages.push(...history.map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })))
@@ -157,7 +159,7 @@ async function askOpenAI(
   const data = await res.json() as any
   const reply = data.choices?.[0]?.message?.content || ''
 
-  // Persist history
+  // 持久化对话历史
   appendHistory(historyKey, prompt, reply)
 
   return { response: reply, sessionId: userId }
@@ -179,13 +181,11 @@ async function askAnthropic(
   const userId = sessionId || '__default__'
   const historyKey = `anthropic:${userId}`
 
-  const systemPrompt = knowledgeContext
-    ? `你是一个有帮助的AI助手。以下是参考知识库内容：\n\n${knowledgeContext}`
-    : '你是一个有帮助的AI助手。'
+  const systemPrompt = buildSystemPrompt(knowledgeContext)
 
   const messages: AnthropicMessage[] = []
 
-  // Load persisted history
+  // 加载持久化的对话历史
   const history = getHistory(historyKey)
   if (history.length > 0) {
     messages.push(...history.map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })))
@@ -216,13 +216,13 @@ async function askAnthropic(
   const data = await res.json() as any
   const reply = data.content?.[0]?.text || ''
 
-  // Persist history
+  // 持久化对话历史
   appendHistory(historyKey, prompt, reply)
 
   return { response: reply, sessionId: userId }
 }
 
-// ── Unified entry point ───────────────────────────────
+// ── 统一入口 ─────────────────────────────────────────
 
 export async function askLLM(
   prompt: string,
@@ -234,12 +234,17 @@ export async function askLLM(
     const settings = getSettings()
     console.log(`[llm] provider: ${settings.llmProvider}, prompt length: ${prompt.length}`)
 
+    // 各 provider 自行处理知识注入
+    const knowledge = settings.llmProvider === 'claude-code'
+      ? getKnowledgeContent()
+      : searchKnowledge(prompt)
+
     if (settings.llmProvider === 'openai') {
-      return await askOpenAI(prompt, sessionId, knowledgeContext)
+      return await askOpenAI(prompt, sessionId, knowledge)
     } else if (settings.llmProvider === 'anthropic') {
-      return await askAnthropic(prompt, sessionId, knowledgeContext)
+      return await askAnthropic(prompt, sessionId, knowledge)
     } else {
-      return await askClaudeCode(prompt, sessionId, knowledgeContext)
+      return await askClaudeCode(prompt, sessionId, knowledge)
     }
   } finally {
     releaseSlot()

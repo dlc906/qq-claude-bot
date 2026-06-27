@@ -41,7 +41,7 @@ export function getSettings(): Settings {
   return { ...settings }
 }
 
-/** Return settings with API key masked */
+/** 返回脱敏后的设置（API Key 只显示后4位） */
 export function getSettingsSafe(): Settings {
   const s = { ...settings }
   if (s.openaiApiKey) {

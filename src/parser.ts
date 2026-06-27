@@ -1,9 +1,18 @@
 import mammoth from 'mammoth'
-import pdfParse from 'pdf-parse'
+
+let pdfParse: ((buffer: Buffer) => Promise<{ text: string }>) | null = null
+
+async function getPdfParse(): Promise<NonNullable<typeof pdfParse>> {
+  if (!pdfParse) {
+    const mod = await import('pdf-parse')
+    pdfParse = mod.default as any
+  }
+  return pdfParse!
+}
 
 /**
- * Parse a file buffer into text based on its extension.
- * Supports: .txt, .md, .pdf, .docx
+ * 根据文件扩展名解析文件 buffer 为文本。
+ * 支持：.txt, .md, .pdf, .docx
  */
 export async function parseFile(buffer: Buffer, filename: string): Promise<string> {
   const ext = filename.toLowerCase().split('.').pop() || ''
@@ -13,7 +22,8 @@ export async function parseFile(buffer: Buffer, filename: string): Promise<strin
   }
 
   if (ext === 'pdf') {
-    const result = await pdfParse(buffer)
+    const pdf = await getPdfParse()
+    const result = await pdf(buffer)
     return result.text
   }
 
@@ -22,11 +32,11 @@ export async function parseFile(buffer: Buffer, filename: string): Promise<strin
     return result.value
   }
 
-  // Fallback: try reading as text
+  // 降级：尝试作为文本读取
   return buffer.toString('utf-8')
 }
 
-/** Get human-readable file type label */
+/** 获取人类可读的文件类型标签 */
 export function getFileType(filename: string): string {
   const ext = filename.toLowerCase().split('.').pop() || ''
   const map: Record<string, string> = {
